@@ -1,5 +1,5 @@
 # Path to the packs source directory, may be relative or absolute.
-packs_dir: "packs"
+modpacks_dir: "packs"
 # Path to the build directory, used to store built artifacts.
 # May be relative or absolute.
 build_dir: "build"
@@ -29,23 +29,25 @@ package_defaults:
   # Directory to upload the package file to on the remote host.
   dir: "/path/to/pack/directory"
   # For technic-style packages, the forge version to use.
-  forge: "1.7.10-10.13.1.1217"
+  forge_version: "1.7.10-10.13.1.1217"
+  # For technic-style packages, where the forge jar lives in the zip
+  forge_zipfile: "bin/modpack.jar"
 
 packs:
   # modpack key, used to locate the pack in the packs source dir.
   main:
     # Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
     version: 1.0
-    
+
     # Package base name
     # package for this modpack will take the form of: "{base_name}-{version}-{pack_type}.zip",
     # eg: "my-pack-1.0-vanilla.zip"
     base_name: 'my-pack'
-    
+
     # Additionally, you may provide modpack-specific configurations for each package_type.
     # The key should be the package type (see package_types above), and it may have any of the configuration
     # options specified in package_defaults above.
-    
+
     # Example custom server zip config. This will only apply to server type zips.
     server:
       # We want to upload the server zip to our minecraft server, not our web server.

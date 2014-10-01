@@ -1,110 +1,120 @@
 import os
 import shutil
 import sys
+import urllib
 import yaml
 import zipfile
 import zlib
 from fabric.api import *
 
-config = {}
-with open("config.yml", "r") as configFile:
-    config = yaml.load(configFile)
+DEFAULT_PACKAGE_NAME="modpack"
+DEFAULT_PACKAGE_VERSION="1.0"
+CONFIG_FILE="config.yml"
+CONF = {}
+with open(CONFIG_FILE, "r") as configFile:
+    CONF = yaml.load(configFile)
 
 
-def get_host(pack_type):
-    c = env.conf
-    if pack_type in c and 'host' in c[pack_type]:
-        return c[pack_type]['host']
-    return config['deploy']['host']
+def zip_name(pkg_type):
+    base_name = env.conf.get('base_name', DEFAULT_PACKAGE_NAME)
+    version = env.conf.get('version', DEFAULT_PACKAGE_VERSION)
+    return '%s-%s-%s.zip' % (base_name, version, pkg_type)
 
 
-def zip_dir(zipFile, path):
-    pathLen = len(path)
+def zip_dir(zipf, path):
+    prefix = len(path)
     for root, dirs, files in os.walk(path):
         for f in files:
-            filePath = os.path.join(root,f)
-            zipFile.write(filePath, filePath[pathLen:], compress_type=zipfile.ZIP_DEFLATED)
+            fp = os.path.join(root,f)
+            zipf.write(fp, fp[prefix:], compress_type=zipfile.ZIP_DEFLATED)
 
 
-def zip_name(zip_type):
-    return '%s-%s-%s.zip' % (env.conf['base_name'], env.conf['version'], zip_type)
-
-
-def build_zip(zip_name, base_dir, pack_type, additional={}):
-    base_dir = 'packs/%s' % env.pack
-    filename = '%s/%s' % (config['build_dir'], zip_name)
+def build_zip(zip_name, base_dir, pkg_style, additional={}):
+    base_dir = '%s/%s' % (CONF['modpacks_dir'], env.modpack)
+    filename = '%s/%s' % (CONF['build_dir'], zip_name)
     zipf = zipfile.ZipFile(filename, 'w')
     # add common files
     zip_dir(zipf, base_dir+'/common')
-    # add client files
-    zip_dir(zipf, base_dir+'/'+pack_type)
-
+    # add package-style specific files (server vs client)
+    zip_dir(zipf, base_dir+'/'+pkg_style)
     for f in additional:
         if os.path.isfile(additional[f]):
             zipf.write(additional[f], f, compress_type=zipfile.ZIP_DEFLATED)
-
     zipf.close()
 
 
-def add_files_server():
+def add_files_noop():
     return {}
 
-def add_files_vanilla():
-    return {}
 
 def add_files_technic():
-    return {
-            "bin/modpack.jar": '%s/%s' % (config['forge_dir'], env.conf['technic']['forge'])
-    }
-
+    adds = {}
+    forge_version = env.conf['technic']['forge_version']
+    forge_jar = CONF['forge']['jar_pattern'] % forge_version
+    forge_dir = CONF['build_dir'] +'/'+ CONF['forge']['cache_dir']
+    forge_file = forge_dir+'/'+forge_jar
+    if not os.path.isfile(forge_file):
+        if not os.path.exists(forge_dir):
+            os.makedirs(forge_dir)
+        forge_url = CONF['forge']['url_pattern'] % (forge_version, forge_jar)
+        urllib.urlretrieve(forge_url, forge_file)
+    adds[env.conf['technic']['forge_zipfile']] = forge_file
+    return adds
 
 
 @task
 def pack(name):
-    if name in config['packs']:
-        env.pack = name
-        env.conf = config['packs'][name]
+    if name in CONF['modpacks']:
+        env.modpack = name
+        env.conf = CONF['modpacks'][name]
+        for pkgType in CONF['package_types']:
+            if pkgType not in env.conf:
+                env.conf[pkgType] = {}
+            env.conf[pkgType].update(CONF[package_defaults])
     else:
-        raise Exception("Unknown pack: "+name)
+        raise Exception("Unknown modpack: "+name)
 
 
 @task
 def clean():
-    print "Cleaning."
-    if os.path.isdir(config['build_dir']):
-        shutil.rmtree(config['build_dir'])
+    print "Cleaning up build dir."
+    if os.path.exists(CONF['build_dir']):
+        shutil.rmtree(CONF['build_dir'])
 
 
 @task
-def build(*pack_types):
-    require('pack', providedBy=[pack])
-    if not pack_types:
-        pack_types = list(config['pack_types'].keys())
-    if not os.path.isdir(config['build_dir']):
-        os.mkdir(config['build_dir'])
-    for kind in pack_types:
-        print "Building %s pack." % kind
-        pack_path = '%s/%s' % (config['packs_dir'], env.pack)
-        adds = getattr(sys.modules[__name__], "add_files_"+kind)()
-        build_zip(zip_name(kind), pack_path, config['pack_types'][kind], adds)
+def build(*package_types):
+    require('modpack', providedBy=[pack])
+    if not package_types:
+        package_types = list(CONF['package_types'].keys())
+    if not os.path.exists(CONF['build_dir']):
+        os.makedirs(CONF['build_dir'])
+    for pkg in package_types:
+        print "Building %s package." % pkg
+        path = CONF['modpacks_dir'] +'/'+ env.modpack
+        build_zip(zip_name(pkg), path, CONF['package_types'][pkg],
+                getattr(sys.modules[__name__], "add_files_"+pkg, add_files_noop)())
 
 
 @task
-def deploy(*pack_types):
-    require('pack', providedBy=[pack])
-    print "Deploying zips for pack: "+env.pack
-    if not pack_types:
-        pack_types = list(config['pack_types'].keys())
-    for kind in pack_types:
-        execute(upload_pack, host=get_host(kind), pack_type=kind)
+def deploy(*package_types):
+    require('modpack', providedBy=[pack])
+    if not package_types:
+        package_types = list(CONF['package_types'].keys())
+    for pkg in package_types:
+        execute(upload_package, host=env.conf[pkg]['host'], pkg_type=pkg)
 
-def upload_pack(pack_type):
-    c = env.conf
-    local_file = '%s/%s' % (config['build_dir'], zip_name(pack_type))
-    remote_dir = config['deploy']['dir']
-    if pack_type in c and 'dir' in c[pack_type]:
-        remote_dir = c[pack_type]['dir']
+
+def upload_pack(pkg_type):
+    local_file = '%s/%s' % (CONF['build_dir'], zip_name(pkg_type))
     if os.path.isfile(local_file):
-        print "Uploading %s pack..." % pack_type
-        put(local_file, remote_dir)
+        print "Uploading %s package..." % pkg_type
+        put(local_file, env.conf[pkg_type]['dir'])
 
+
+@task
+def debug():
+    require('modpack', providedBy=[pack])
+    print "Config file: "+CONF
+    print "Selected modpack: "+env.modpack
+    print "Modpack Config: "+env.conf
