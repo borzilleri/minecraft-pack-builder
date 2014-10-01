@@ -1,0 +1,4 @@
+Fabric==1.10.0
+PyYAML==3.10
+paramiko==1.15.1
+pycrypto==2.6.1
