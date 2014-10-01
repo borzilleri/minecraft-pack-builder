@@ -3,38 +3,52 @@ packs_dir: "packs"
 # Path to the build directory, used to store built artifacts.
 # May be relative or absolute.
 build_dir: "build"
-forge_dir: "forge"
 
 # Currently Unused
 forge:
+	# Directory (relative to build_dir) to cache forge files in.
   cache_dir: "forge"
-  base_url: "http://files.minecraftforge.net/maven/net/minecraftforge/forge"
+  # format string pattern to use for building a forge jar file name from a version
+  jar_pattern: "forge-%(version)s-universal.jar"
+  # format string pattern to use for building a download url for a forge jar file.
+  url_pattern: "http://files.minecraftforge.net/maven/net/minecraftforge/forge/%(version)s/%(jar_name)s"
 
 # Define various pack types, this is effectively a dictionary where:
-# key = name of pack type
-# value = style of pack type (valid values are 'client' or 'server')
-pack_types:
+# key = name of package type
+# value = style of package (valid values are 'client' or 'server')
+# You probably shouldn't change this unless you're sure of what you're doing.
+package_types:
   server: "server"
   vanilla: "client"
   technic: "client"
 
-# Default deploy configuration, if not explicitly set, packs will
-# be uploaded to this host/dir in the deploy task.
-deploy:
+# Default configurations when building/deploying packages.
+package_defaults:
+	# Hostname to upload the package file to.
   host: "fileserver.example.com"
+  # Directory to upload the package file to on the remote host.
   dir: "/path/to/pack/directory"
+  # For technic-style packages, the forge version to use.
+  forge: "1.7.10-10.13.1.1217"
 
 packs:
-  # Pack key, used to locate the pack in the packs source dir.
+  # modpack key, used to locate the pack in the packs source dir.
   main:
-    version: 4.0
-    # Used as the base name for generating zip files.
-    # Zip file names take the form of "{base_name}-{version}-{pack_type}.zip"
-    base_name: 'rampant-pack'
-    # Configuration for technic pack type.
-    technic:
-      forge: "forge-1.7.10-10.13.1.1217-universal.jar"
-    # Configuration for server pack type
+  	# Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
+    version: 1.0
+    
+    # Package base name
+    # package for this modpack will take the form of: "{base_name}-{version}-{pack_type}.zip",
+    # eg: "my-pack-1.0-vanilla.zip"
+    base_name: 'my-pack'
+    
+    # Additionally, you may provide modpack-specific configurations for each package_type.
+    # The key should be the package type (see package_types above), and it may have any of the configuration
+    # options specified in package_defaults above.
+    
+    # Example custom server zip config. This will only apply to server type zips.
     server:
+    	# We want to upload the server zip to our minecraft server, not our web server.
       host: "mc-server.example.com"
+      # Which has a different path, obviously.
       dir: "/path/to/minecraft/server"
