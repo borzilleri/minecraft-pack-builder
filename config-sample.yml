@@ -6,7 +6,7 @@ build_dir: "build"
 
 # Currently Unused
 forge:
-	# Directory (relative to build_dir) to cache forge files in.
+  # Directory (relative to build_dir) to cache forge files in.
   cache_dir: "forge"
   # format string pattern to use for building a forge jar file name from a version
   jar_pattern: "forge-%(version)s-universal.jar"
@@ -24,7 +24,7 @@ package_types:
 
 # Default configurations when building/deploying packages.
 package_defaults:
-	# Hostname to upload the package file to.
+  # Hostname to upload the package file to.
   host: "fileserver.example.com"
   # Directory to upload the package file to on the remote host.
   dir: "/path/to/pack/directory"
@@ -34,7 +34,7 @@ package_defaults:
 packs:
   # modpack key, used to locate the pack in the packs source dir.
   main:
-  	# Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
+    # Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
     version: 1.0
     
     # Package base name
@@ -48,7 +48,7 @@ packs:
     
     # Example custom server zip config. This will only apply to server type zips.
     server:
-    	# We want to upload the server zip to our minecraft server, not our web server.
+      # We want to upload the server zip to our minecraft server, not our web server.
       host: "mc-server.example.com"
       # Which has a different path, obviously.
       dir: "/path/to/minecraft/server"
