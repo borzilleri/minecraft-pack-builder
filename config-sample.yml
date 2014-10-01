@@ -1,0 +1,40 @@
+# Path to the packs source directory, may be relative or absolute.
+packs_dir: "packs"
+# Path to the build directory, used to store built artifacts.
+# May be relative or absolute.
+build_dir: "build"
+forge_dir: "forge"
+
+# Currently Unused
+forge:
+  cache_dir: "forge"
+  base_url: "http://files.minecraftforge.net/maven/net/minecraftforge/forge"
+
+# Define various pack types, this is effectively a dictionary where:
+# key = name of pack type
+# value = style of pack type (valid values are 'client' or 'server')
+pack_types:
+  server: "server"
+  vanilla: "client"
+  technic: "client"
+
+# Default deploy configuration, if not explicitly set, packs will
+# be uploaded to this host/dir in the deploy task.
+deploy:
+  host: "fileserver.example.com"
+  dir: "/path/to/pack/directory"
+
+packs:
+  # Pack key, used to locate the pack in the packs source dir.
+  main:
+    version: 4.0
+    # Used as the base name for generating zip files.
+    # Zip file names take the form of "{base_name}-{version}-{pack_type}.zip"
+    base_name: 'rampant-pack'
+    # Configuration for technic pack type.
+    technic:
+      forge: "forge-1.7.10-10.13.1.1217-universal.jar"
+    # Configuration for server pack type
+    server:
+      host: "mc-server.example.com"
+      dir: "/path/to/minecraft/server"
