@@ -1,56 +1,94 @@
-# Path to the packs source directory, may be relative or absolute.
-modpacks_dir: "packs"
-# Path to the build directory, used to store built artifacts.
-# May be relative or absolute.
-build_dir: "build"
+packages:
+  - server
+  - vanilla
+  - technic
 
-# Currently Unused
-forge:
-  # Directory (relative to build_dir) to cache forge files in.
-  cache_dir: "forge"
-  # format string pattern to use for building a forge jar file name from a version
-  jar_pattern: "forge-%(version)s-universal.jar"
-  # format string pattern to use for building a download url for a forge jar file.
-  url_pattern: "http://files.minecraftforge.net/maven/net/minecraftforge/forge/%(version)s/%(jar_name)s"
+server:
+  builder: "vanilla"
 
-# Define various pack types, this is effectively a dictionary where:
-# key = name of package type
-# value = style of package (valid values are 'client' or 'server')
-# You probably shouldn't change this unless you're sure of what you're doing.
-package_types:
-  server: "server"
-  vanilla: "client"
-  technic: "client"
+vanilla:
+  builder: "vanilla"
 
-# Default configurations when building/deploying packages.
-package_defaults:
+technic:
+  builder: "technic"
+
+
+# You can set per-package type configurations like this
+server:
+  host: "mc-server.example.com"
+  dir: "/path/to/server"
+
+# Or, if you have the same configurations for multiple package types,
+# You can use YAML references like this:
+package_defaults: &PKG_DEFAULTS
   # Hostname to upload the package file to.
   host: "fileserver.example.com"
   # Directory to upload the package file to on the remote host.
   dir: "/path/to/pack/directory"
-  # For technic-style packages, the forge version to use.
-  forge_version: "1.7.10-10.13.1.1217"
-  # For technic-style packages, where the forge jar lives in the zip
-  forge_zipfile: "bin/modpack.jar"
 
+# Y
+vanilla:
+  <<: *PKG_DEFAULTS
+
+# The list of modpacks and path to find them
 modpacks:
-  # modpack key, used to locate the pack in the packs source dir.
-  main:
-    # Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
-    version: 1.0
+  first: "/path/to/my-first-pack"
+  second: "relative/path/to/second/pack"
 
-    # Package base name
-    # package for this modpack will take the form of: "{base_name}-{version}-{pack_type}.zip",
-    # eg: "my-pack-1.0-vanilla.zip"
-    base_name: 'my-pack'
 
-    # Additionally, you may provide modpack-specific configurations for each package_type.
-    # The key should be the package type (see package_types above), and it may have any of the configuration
-    # options specified in package_defaults above.
 
-    # Example custom server zip config. This will only apply to server type zips.
-    server:
-      # We want to upload the server zip to our minecraft server, not our web server.
-      host: "mc-server.example.com"
-      # Which has a different path, obviously.
-      dir: "/path/to/minecraft/server"
+# A list of the packages to generate.
+# You can override this with your own list if you want to to remove some
+# of these packages.
+packages:
+  - server
+  - vanilla
+  - technic
+
+
+# Configurations specific to server packages.
+server:
+  dirs:
+    - common
+    - server
+
+
+client_default: &CLIENT_DEFAULT
+  dirs:
+    - common
+    - client
+
+# Configuration Specific to vanilla minecraft packages.
+vanilla:
+  <<: *CLIENT_DEFAULT
+
+# Configurations specific to technic platform packages.
+technic:
+  <<: *CLIENT_DEFAULT
+  # The version of forge to include.
+  forge_version: "1.7.10-10.13.1.1217"
+  # The path/filename the forge jar should be in the packaged zip file.
+  forge_packagedName: "bin/modpack.jar"
+
+
+server:
+  builder: "vanilla"
+  vanilla:
+    directories:
+      - common
+      - server
+  deployers:
+    - github
+    - ssh
+  ssh:
+    host: "hostname"
+    directory: "/path"
+
+technic:
+  builder: "technic"
+  technic:
+    directories:
+      - common
+      - client
+  deployers:
+    - github

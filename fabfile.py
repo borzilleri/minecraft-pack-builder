@@ -1,123 +1,137 @@
 import os
 import shutil
-import sys
-import urllib
+import pprint
+
 import yaml
-import zipfile
-import zlib
 from fabric.api import *
 
-DEFAULT_PACKAGE_NAME="modpack"
-DEFAULT_PACKAGE_VERSION="1.0"
-CONFIG_FILE="config.yml"
-CONF = {}
-with open(CONFIG_FILE, "r") as configFile:
-    CONF = yaml.load(configFile)
+import builder
 
 
-def zip_name(pkg_type):
-    base_name = env.conf.get('base_name', DEFAULT_PACKAGE_NAME)
-    version = env.conf.get('version', DEFAULT_PACKAGE_VERSION)
-    return '%s-%s-%s.zip' % (base_name, version, pkg_type)
+PACK_CONF = {}
+DEFAULTS = {
+    'config_file': 'config.yml',
+    'build_dir': 'build'
+}
+DEFAULT_PACK_KEY = "_default"
+PACK_LIST_FILENAME = ".modpacks.yml"
+PACKS = {}
+
+if os.path.exists(PACK_LIST_FILENAME):
+    with open(PACK_LIST_FILENAME, "r") as pack_file:
+        PACKS.update(yaml.load(pack_file))
 
 
-def zip_dir(zipf, path):
-    prefix = len(path)
-    for root, dirs, files in os.walk(path):
-        for f in files:
-            if not f.startswith('.'):
-                fp = os.path.join(root,f)
-                zipf.write(fp, fp[prefix:], compress_type=zipfile.ZIP_DEFLATED)
-
-
-def build_zip(zip_name, base_dir, pkg_style, additional={}):
-    base_dir = '%s/%s' % (CONF['modpacks_dir'], env.modpack)
-    filename = '%s/%s' % (CONF['build_dir'], zip_name)
-    zipf = zipfile.ZipFile(filename, 'w')
-    # add common files
-    zip_dir(zipf, base_dir+'/common')
-    # add package-style specific files (server vs client)
-    zip_dir(zipf, base_dir+'/'+pkg_style)
-    for f in additional:
-        if os.path.isfile(additional[f]):
-            zipf.write(additional[f], f, compress_type=zipfile.ZIP_DEFLATED)
-    zipf.close()
-
-
-def add_files_noop():
-    return {}
-
-
-def add_files_technic():
-    adds = {}
-    forge_version = env.conf['technic']['forge_version']
-    forge_jar = CONF['forge']['jar_pattern'] % forge_version
-    forge_dir = CONF['build_dir'] +'/'+ CONF['forge']['cache_dir']
-    forge_file = forge_dir+'/'+forge_jar
-    if not os.path.isfile(forge_file):
-        if not os.path.exists(forge_dir):
-            os.makedirs(forge_dir)
-        forge_url = CONF['forge']['url_pattern'] % (forge_version, forge_jar)
-        urllib.urlretrieve(forge_url, forge_file)
-    adds[env.conf['technic']['forge_zipfile']] = forge_file
-    return adds
-
-
-@task
-def pack(name):
-    if name in CONF['modpacks']:
-        env.modpack = name
-        env.conf = CONF['modpacks'][name]
-        for pkgType in CONF['package_types']:
-            if pkgType not in env.conf:
-                env.conf[pkgType] = {}
-            env.conf[pkgType] = dict(CONF['package_defaults'].items()+env.conf[pkgType].items())
-    else:
-        raise Exception("Unknown modpack: "+name)
-
-
-@task
-def clean():
-    print "Cleaning up build dir."
-    if os.path.exists(CONF['build_dir']):
-        shutil.rmtree(CONF['build_dir'])
-
-
-@task
-def build(*package_types):
-    require('modpack', providedBy=[pack])
-    if not package_types:
-        package_types = list(CONF['package_types'].keys())
-    if not os.path.exists(CONF['build_dir']):
-        os.makedirs(CONF['build_dir'])
-    for pkg in package_types:
-        print "Building %s package." % pkg
-        path = CONF['modpacks_dir'] +'/'+ env.modpack
-        build_zip(zip_name(pkg), path, CONF['package_types'][pkg],
-                getattr(sys.modules[__name__], "add_files_"+pkg, add_files_noop)())
-
-
-@task
-def deploy(*package_types):
-    require('modpack', providedBy=[pack])
-    if not package_types:
-        package_types = list(CONF['package_types'].keys())
-    for pkg in package_types:
-        execute(upload_package, host=env.conf[pkg]['host'], pkg_type=pkg)
-
-
-def upload_package(pkg_type):
-    local_file = '%s/%s' % (CONF['build_dir'], zip_name(pkg_type))
-    if os.path.isfile(local_file):
-        print "Uploading %s package..." % pkg_type
-        put(local_file, env.conf[pkg_type]['dir'])
+# def upload_package(pkg_type):
+# local_file = build_zip_name(pkg_type)
+#    if os.path.isfile(local_file):
+#        print "Uploading %s package..." % pkg_type
+#        put(local_file, CONF[pkg_type]['dir'])
+class PackageException(Exception):
+    pass
 
 
 @task
 def debug():
+    _default_pack()
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(PACKS)
+    pp.pprint(PACK_CONF)
+
+
+@task(name="add")
+def add_pack(pack_name, pack_path, default_pack=False):
+    pack_path = os.path.abspath(os.path.expanduser(pack_path))
+    # TODO: Improve validation of config file maybe?
+    if pack_name in PACKS and PACKS[pack_name] == pack_path:
+        print "%s already exists with path %s" % (pack_name, pack_path)
+    elif not os.path.isdir(pack_path):
+        print "%s is not a directory" % pack_path
+    elif not os.path.isfile(pack_path + "/" + DEFAULTS['config_file']):
+        print "No %s found in %s" % (DEFAULTS['config_file'], pack_path)
+    else:
+        PACKS[pack_name] = pack_path
+        if default_pack:
+            PACKS[DEFAULT_PACK_KEY] = pack_name
+        with open(PACK_LIST_FILENAME, 'w') as pf:
+            pf.write(yaml.dump(PACKS))
+            pf.close()
+        print "Added pack %s at %s" % (pack_name, pack_path)
+
+
+@task(name="remove")
+def remove_packs(pack_name):
+    if pack_name not in PACKS:
+        print "Unknown pack %s" % pack_name
+    else:
+        if DEFAULT_PACK_KEY in PACKS and PACKS[DEFAULT_PACK_KEY] == pack_name:
+            PACKS[DEFAULT_PACK_KEY] = None
+        PACKS.pop(pack_name, None)
+        with open(PACK_LIST_FILENAME, 'w') as pf:
+            pf.write(yaml.dump(PACKS))
+            pf.close()
+        print "Removed pack %s" % pack_name
+
+
+@task(name="list")
+def list_packs():
+    print "Known Packs:"
+    for pack_name in PACKS:
+        print "%s : %s" % (pack_name, PACKS[pack_name])
+
+
+def _default_pack():
+    if DEFAULT_PACK_KEY in PACKS and PACKS[DEFAULT_PACK_KEY] in PACKS:
+        pack(PACKS[DEFAULT_PACK_KEY])
+
+
+@task
+def clean():
+    print "Cleaning build directory."
+    if os.path.exists(DEFAULTS['build_dir']):
+        shutil.rmtree(DEFAULTS['build_dir'])
+
+
+@task
+def pack(name):
+    if name not in PACKS:
+        raise Exception("Unknown modpack: " + name)
+    pack_config_file = PACKS[name] + '/' + DEFAULTS['config_file']
+    if not os.path.isfile(pack_config_file):
+        raise Exception("Pack '%s' has no config file." % name)
+    with open(pack_config_file, "r") as cf:
+        PACK_CONF.update(yaml.load(cf))
+    env.modpack = name
+
+
+def _require_pack():
+    if DEFAULT_PACK_KEY in PACKS and PACKS[DEFAULT_PACK_KEY] in PACKS:
+        pack(PACKS[DEFAULT_PACK_KEY])
     require('modpack', providedBy=[pack])
-    print "Config file: "
-    print CONF
-    print "Selected modpack: "+env.modpack
-    print "Modpack Config: "
-    print env.conf
+
+
+@task
+def build(*packages):
+    _require_pack()
+    if 'packages' not in PACK_CONF or not PACK_CONF['packages']:
+        raise PackageException("Pack config does not define any packages.")
+    if not packages:
+        packages = PACK_CONF['packages']
+    for pkg in packages:
+        if pkg not in PACK_CONF['packages']:
+            print "Cannot find package definition: " + pkg
+        else:
+            builder.build(DEFAULTS['build_dir'], PACK_CONF, pkg,
+                PACKS[env.modpack])
+
+
+@task
+def deploy(*packages):
+    _require_pack()
+    if 'packages' not in PACK_CONF or not PACK_CONF['packages']:
+        raise PackageException("Pack config does not define any packages.")
+    for pkg in packages:
+        if pkg not in PACK_CONF['packages']:
+            print "Cannot find package definition: " + pkg
+        else:
+            # Do Upload
