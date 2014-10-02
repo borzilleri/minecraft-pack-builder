@@ -25,8 +25,9 @@ def zip_dir(zipf, path):
     prefix = len(path)
     for root, dirs, files in os.walk(path):
         for f in files:
-            fp = os.path.join(root,f)
-            zipf.write(fp, fp[prefix:], compress_type=zipfile.ZIP_DEFLATED)
+            if not f.startswith('.'):
+                fp = os.path.join(root,f)
+                zipf.write(fp, fp[prefix:], compress_type=zipfile.ZIP_DEFLATED)
 
 
 def build_zip(zip_name, base_dir, pkg_style, additional={}):
@@ -70,7 +71,7 @@ def pack(name):
         for pkgType in CONF['package_types']:
             if pkgType not in env.conf:
                 env.conf[pkgType] = {}
-            env.conf[pkgType].update(CONF[package_defaults])
+            env.conf[pkgType] = dict(CONF['package_defaults'].items()+env.conf[pkgType].items())
     else:
         raise Exception("Unknown modpack: "+name)
 
@@ -105,7 +106,7 @@ def deploy(*package_types):
         execute(upload_package, host=env.conf[pkg]['host'], pkg_type=pkg)
 
 
-def upload_pack(pkg_type):
+def upload_package(pkg_type):
     local_file = '%s/%s' % (CONF['build_dir'], zip_name(pkg_type))
     if os.path.isfile(local_file):
         print "Uploading %s package..." % pkg_type
@@ -115,6 +116,8 @@ def upload_pack(pkg_type):
 @task
 def debug():
     require('modpack', providedBy=[pack])
-    print "Config file: "+CONF
+    print "Config file: "
+    print CONF
     print "Selected modpack: "+env.modpack
-    print "Modpack Config: "+env.conf
+    print "Modpack Config: "
+    print env.conf

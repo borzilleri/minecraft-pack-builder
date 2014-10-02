@@ -33,7 +33,7 @@ package_defaults:
   # For technic-style packages, where the forge jar lives in the zip
   forge_zipfile: "bin/modpack.jar"
 
-packs:
+modpacks:
   # modpack key, used to locate the pack in the packs source dir.
   main:
     # Pack Version Number, only used to generate the zip file names, it's an arbitrary string/number.
